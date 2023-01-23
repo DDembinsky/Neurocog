@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime
 from sklearn.decomposition import IncrementalPCA
 import torch
 from torch.utils.data import DataLoader, TensorDataset
@@ -144,7 +143,7 @@ def preprocess_dataset(method: str, consecutive_steps : int = 3000, stride : int
             if normalize:
                 df = __normalize_dataframe(df)
             dfs[file_name] = df
-            print(file_name + " loaded            ", end = "\r")
+            print("\r" +file_name + " loaded            ", end = "", flush=True)
             
     if pca is not None:
         dfs = __pca_dataset(dfs, pca)   
@@ -156,11 +155,11 @@ def preprocess_dataset(method: str, consecutive_steps : int = 3000, stride : int
             df_new = func(df = df, consecutive_steps = consecutive_steps , stride = stride)
             dfs[file_name] = df_new
             
-            print(file_name + " preprocessed         " , end = "\r")
+            print("\r" +file_name + " preprocessed         " , end = "", flush=True)
             
             
    
-    print("Finished dataset")
+    print("\rFinished preprocessing dataset", flush=True)
     return dfs      
             
 def __pca_dataset(dfs : dict, num_pc : int = None) -> dict:
@@ -177,7 +176,7 @@ def __pca_dataset(dfs : dict, num_pc : int = None) -> dict:
     pca = IncrementalPCA(n_components=num_pc)
     
     for k in dfs.keys():
-        print("PCA fit  " + k, end = "\r")
+        print("\rPCA fit  " + k, end = "")
         pca.partial_fit(dfs[k].to_numpy()[:,:-1])
         
 

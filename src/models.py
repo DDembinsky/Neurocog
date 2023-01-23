@@ -53,7 +53,7 @@ class Linear_NN(EOGModel):
         return self.model(x)
 
 class OneD_Conv(EOGModel):
-    def __init__(self,in_features = 16, out_features = 4, num_hidden = [[10],[146,20]]) -> None:
+    def __init__(self,in_features = 16, out_features = 4, num_hidden = [[10],[140,20]]) -> None:
         """Creates a 1D-Conv network fro mthe arguments provided
 
         Args:

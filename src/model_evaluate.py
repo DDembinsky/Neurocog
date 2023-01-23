@@ -1,5 +1,5 @@
 import torch
-from models import EOGModel, Linear_NN
+from models import EOGModel, Linear_NN, OneD_Conv, Rec_NN
 from preprocess_data import preprocess_dataset, create_dataloader
 
 from collections import deque
@@ -9,6 +9,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from random import randint
 import numpy as np
+import pickle
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 BATCH_SIZE = 256
 
 
@@ -38,14 +41,14 @@ def train_epoch(model : EOGModel, dataloader : torch.utils.data.DataLoader, opti
     
     for itr, (datas,labels) in enumerate(dataloader):
         if verbose:
-            print("Training. Batch {}/{}. Running Acc: {:.2f}%     Loss window: {:.4f}".format(itr,len(dataloader), acc, sum(list(loss_window))/len(loss_window)), end = "\r")
+            print("\rTraining. Batch {}/{}. Running Acc: {:.2f}%     Loss window: {:.4f}".format(itr,len(dataloader), acc, sum(list(loss_window))/len(loss_window)), end = "")
         optimizer.zero_grad()
 
         # Predict
-        output = model(datas.to(__device))
+        output = model(datas.to(__device)).cpu()
         
         # Metrics
-        _, pred = output.cpu().max(1, keepdims=True)
+        _, pred = output.max(1, keepdims=True)
         correct += pred.eq(labels).sum().item()
         total += len(datas)
         acc = correct / total * 100
@@ -75,25 +78,27 @@ def test_epoch(model : EOGModel, dataloader : torch.utils.data.DataLoader, verbo
     Returns:
         float: The accuraccy of the model
     """
+    __device = next(model.parameters()).device
+    
     model.eval()
     correct, total, acc = 0,0, 0
    
 
     for itr, (datas,labels) in enumerate(dataloader):
         if verbose:
-            print("Testing. Batch {}/{}. Running Acc: {:.2f}%".format(itr,len(dataloader), acc), end = "\r")
+            print("\rTesting. Batch {}/{}. Running Acc: {:.2f}%".format(itr,len(dataloader), acc), end = "")
        
         # Predict
-        output = model(datas)
+        output = model(datas.to(__device)).cpu()
         
         # Metrics
-        _, pred = output.cpu().max(1, keepdims=True)
+        _, pred = output.max(1, keepdims=True)
         correct += pred.eq(labels).sum().item()
         total += len(datas)
         acc = correct / total * 100
         
     if verbose:
-        print("Testing. Batch {}/{}. Running Acc: {:.2f}%".format(itr + 1,len(dataloader), acc))
+        print("\rTesting. Batch {}/{}. Running Acc: {:.2f}%".format(itr + 1,len(dataloader), acc))
         
     return acc
 
@@ -111,7 +116,7 @@ def evaluate_model_cross(model : EOGModel, num_epochs : int, dfs : dict, optim_k
     overall_acc_train = []
     overall_acc_test  = []
     for leave_out in range(1,11,1) :
-        print("Person {} is left out".format(leave_out), end = "\r")
+        print("\rPerson {} is left out".format(leave_out), end = "", flush=True)
         model.reset_parameters()
         
         keys_test  = ["p{}_d1".format(leave_out),"p{}_d2".format(leave_out)]
@@ -129,7 +134,7 @@ def evaluate_model_cross(model : EOGModel, num_epochs : int, dfs : dict, optim_k
         overall_acc_train.append(acc_train)
         overall_acc_test .append(acc_test)
 
-    print("Model {} Acc Mean:  Train: {:.2f}    Test: {:.2f}".format(model.description(), sum(overall_acc_train)/len(overall_acc_train), sum(overall_acc_test)/len(overall_acc_test) ))
+    print("\rModel {} Acc Mean:  Train: {:.2f}    Test: {:.2f}".format(model.description(), sum(overall_acc_train)/len(overall_acc_train), sum(overall_acc_test)/len(overall_acc_test) ), flush=True)
     return (overall_acc_train, overall_acc_test)
 
 def show_model_performances_cross(models : list, dfs : dict, name:str):
@@ -138,18 +143,30 @@ def show_model_performances_cross(models : list, dfs : dict, name:str):
     Args:
         models (list): list of models
     """
-    LOG_SAVES = {
-          }
+    
     
     logging = pd.DataFrame(columns= ["model", "acc", "set"])
     
+    try:
+        # Is empty
+        LOG_FILE = open("res/logs/cross_validation_{}.pickle".format(name), "xb")
+        LOG_SAVES = {}
+        pickle.dump(LOG_SAVES, LOG_FILE)
+        LOG_FILE.close()
+    except FileExistsError:
+        with open("res/logs/cross_validation_{}.pickle".format(name), "rb") as LOG_FILE:
+            LOG_SAVES = pickle.load(LOG_FILE)   
+        
     for mod in models:
+
         if mod.description() in LOG_SAVES:
             overall_acc_train, overall_acc_test = LOG_SAVES[mod.description()]
-            
+                
         else:
             overall_acc_train, overall_acc_test = evaluate_model_cross(mod,5,dfs)
-            print('"{}" : ({},{}),'.format(mod.description(), overall_acc_train, overall_acc_test) )
+            LOG_SAVES["{}".format(mod.description())] = (overall_acc_train, overall_acc_test )
+            with open("res/logs/cross_validation_{}.pickle".format(name), "ab") as LOG_FILE:
+                pickle.dump(LOG_SAVES, LOG_FILE)
         logging = pd.concat([logging, 
         
             pd.DataFrame({
@@ -166,17 +183,18 @@ def show_model_performances_cross(models : list, dfs : dict, name:str):
     
     sns.boxplot(data=logging, x="acc", y="model", hue="set")
     #sns.stripplot(data=logging, x="acc", y="model", hue="set")
-    sns.despine(trim = True)
+    sns.despine()
     
     plt.grid(axis = "x", alpha = 0.6)
     plt.grid(axis = "x", alpha = 0.4, which ="minor")
     ax = plt.gca()
     start, end = ax.get_xlim()
     ax.set_xticks(np.arange(int(np.floor(start)), int(np.ceil(end)), 1), minor = True)
+    ax.set_title("leave-one-participant-out performance for {} models".format(name))
     
-    ri = randint(100000,999999)
-    plt.savefig("res/cross_performance_{}_{}.png".format(name,ri))
-    plt.savefig("res/cross_performance_{}_{}.pdf".format(name,ri))
+    plt.tight_layout()
+    plt.savefig("res/cross_performance_{}.png".format(name))
+    plt.savefig("res/cross_performance_{}.pdf".format(name))
     plt.close()
     
 
@@ -191,7 +209,7 @@ def model_in_person_accuracy(model : EOGModel, num_epochs, dfs : dict, optim_kwa
     overall_acc_train = []
     overall_acc_test  = []
     for person in range(1,11,1) :
-        print("Person {}".format(person), end = "\r")
+        print("\rPerson {}".format(person), end = "")
        
         loader_d1_train, weights_d1  = create_dataloader({"p{}_d1".format(person) : dfs["p{}_d1".format(person)]},BATCH_SIZE, return_weights=True)
         loader_d1_test   = create_dataloader({"p{}_d1".format(person) : dfs["p{}_d1".format(person)]},BATCH_SIZE, undersampling=True)
@@ -224,7 +242,7 @@ def model_in_person_accuracy(model : EOGModel, num_epochs, dfs : dict, optim_kwa
         overall_acc_test .append(acc_test)
         
 
-    print("Model {} Acc Mean:  Train: {:.2f}    Test: {:.2f}".format(model.description(), sum(overall_acc_train)/len(overall_acc_train), sum(overall_acc_test)/len(overall_acc_test) ))
+    print("\rModel {} Acc Mean:  Train: {:.2f}    Test: {:.2f}".format(model.description(), sum(overall_acc_train)/len(overall_acc_train), sum(overall_acc_test)/len(overall_acc_test) ))
     return (overall_acc_train, overall_acc_test)
 
 def show_model_performances_in_person(models : list, dfs : dict, name:str):
@@ -233,19 +251,30 @@ def show_model_performances_in_person(models : list, dfs : dict, name:str):
     Args:
         models (list): list of models
     """
-    LOG_SAVES = {
-        }
     
     logging = pd.DataFrame(columns= ["model", "acc", "set"])
     
-    for mod in models:
+    try:
+        # Is empty
+        LOG_FILE = open("res/logs/in_person_{}.pickle".format(name), "xb")
+        LOG_SAVES = {}
+        pickle.dump(LOG_SAVES, LOG_FILE)
+        LOG_FILE.close()
+    except FileExistsError:
+        with open("res/logs/in_person_{}.pickle".format(name), "rb") as LOG_FILE:
+            LOG_SAVES = pickle.load(LOG_FILE)   
         
+    for mod in models:
+
         if mod.description() in LOG_SAVES:
             overall_acc_train, overall_acc_test = LOG_SAVES[mod.description()]
-            
+                
         else:
-            overall_acc_train, overall_acc_test = model_in_person_accuracy(mod,5,dfs)
-            print('"{}" : ({},{}),'.format(mod.description(), overall_acc_train, overall_acc_test) )
+            overall_acc_train, overall_acc_test = evaluate_model_cross(mod,5,dfs)
+            LOG_SAVES["{}".format(mod.description())] = (overall_acc_train, overall_acc_test )
+            with open("res/logs/in_person_{}.pickle".format(name), "ab") as LOG_FILE:
+                pickle.dump(LOG_SAVES, LOG_FILE)
+                
         logging = pd.concat([logging, 
         
             pd.DataFrame({
@@ -262,7 +291,7 @@ def show_model_performances_in_person(models : list, dfs : dict, name:str):
     
     sns.boxplot(data=logging, x="acc", y="model", hue="set")
     #sns.stripplot(data=logging, x="acc", y="model", hue="set")
-    sns.despine(trim = True)
+    sns.despine()
     
     plt.grid(axis = "x", alpha = 0.6)
     plt.grid(axis = "x", alpha = 0.4, which ="minor")
@@ -270,10 +299,11 @@ def show_model_performances_in_person(models : list, dfs : dict, name:str):
     start, end = ax.get_xlim()
     ax.set_xticks(np.arange(int(np.floor(start)), int(np.ceil(end)), 1), minor = True)
     
+    ax.set_title("leave-one-day-out performance for {} models".format(name))
     
-    ri = randint(100000,999999)
-    plt.savefig("res/in_person_performance_{}_{}.png".format(name,ri))
-    plt.savefig("res/in_person_performance_{}_{}.pdf".format(name,ri))
+    plt.tight_layout()
+    plt.savefig("res/in_person_performance_{}.png".format(name))
+    plt.savefig("res/in_person_performance_{}.pdf".format(name))
     plt.close()
     
     
@@ -289,7 +319,7 @@ def model_calibration_accuracy(model : EOGModel, num_epochs, dfs : dict, optim_k
     overall_acc_train = []
     overall_acc_test  = []
     for person in range(1,11,1) :
-        print("Person {}".format(person), end = "\r")
+        print("\rPerson {}".format(person), end = "")
        
         loader_d1_test  = create_dataloader({"p{}_d1".format(person) : dfs["p{}_d1".format(person)]},BATCH_SIZE, undersampling=True)
         loader_d2_test  = create_dataloader({"p{}_d2".format(person) : dfs["p{}_d2".format(person)]},BATCH_SIZE, undersampling=True)
@@ -326,7 +356,7 @@ def model_calibration_accuracy(model : EOGModel, num_epochs, dfs : dict, optim_k
         overall_acc_test .append(acc_test)
         
 
-    print("Model {} Acc Mean:  Train: {:.2f}    Test: {:.2f}".format(model.description(), sum(overall_acc_train)/len(overall_acc_train), sum(overall_acc_test)/len(overall_acc_test) ))
+    print("\rModel {} Acc Mean:  Train: {:.2f}    Test: {:.2f}".format(model.description(), sum(overall_acc_train)/len(overall_acc_train), sum(overall_acc_test)/len(overall_acc_test) ))
     return (overall_acc_train, overall_acc_test)
 
 def show_model_calibration(models : list, dfs: dict, name:str):
@@ -335,18 +365,29 @@ def show_model_calibration(models : list, dfs: dict, name:str):
     Args:
         models (list): list of models
     """
-    LOG_SAVES = {
-      }
     
     logging = pd.DataFrame(columns= ["model", "acc", "set"])
     
+    try:
+        # Is empty
+        LOG_FILE = open("res/logs/in_person_{}.pickle".format(name), "xb")
+        LOG_SAVES = {}
+        pickle.dump(LOG_SAVES, LOG_FILE)
+        LOG_FILE.close()
+    except FileExistsError:
+        with open("res/logs/in_person_{}.pickle".format(name), "rb") as LOG_FILE:
+            LOG_SAVES = pickle.load(LOG_FILE)   
+        
     for mod in models:
+
         if mod.description() in LOG_SAVES:
             overall_acc_train, overall_acc_test = LOG_SAVES[mod.description()]
-            
+                
         else:
-            overall_acc_train, overall_acc_test = model_in_person_accuracy(mod,5,dfs)
-            print('"{}" : ({},{}),'.format(mod.description(), overall_acc_train, overall_acc_test) )
+            overall_acc_train, overall_acc_test = evaluate_model_cross(mod,5,dfs)
+            LOG_SAVES["{}".format(mod.description())] = (overall_acc_train, overall_acc_test )
+            with open("res/logs/in_person_{}.pickle".format(name), "ab") as LOG_FILE:
+                pickle.dump(LOG_SAVES, LOG_FILE)
         logging = pd.concat([logging, 
         
             pd.DataFrame({
@@ -363,46 +404,136 @@ def show_model_calibration(models : list, dfs: dict, name:str):
     
     sns.boxplot(data=logging, x="acc", y="model", hue="set")
     #sns.stripplot(data=logging, x="acc", y="model", hue="set")
-    sns.despine(trim = True)
+    sns.despine()
     
     plt.grid(axis = "x", alpha = 0.6)
     plt.grid(axis = "x", alpha = 0.4, which ="minor")
     ax = plt.gca()
     start, end = ax.get_xlim()
     ax.set_xticks(np.arange(int(np.floor(start)), int(np.ceil(end)), 1), minor = True)
+    ax.set_title("train-and-calibrate performance for {} models".format(name))
     
-    ri = randint(100000,999999)
-    plt.savefig("res/calibration_performance_{}_{}.png".format(name,ri))
-    plt.savefig("res/calibration_performance_{}_{}.pdf".format(name,ri))
+    plt.tight_layout()
+    plt.savefig("res/calibration_performance_{}.png".format(name))
+    plt.savefig("res/calibration_performance_{}.pdf".format(name))
     plt.close()
 
 
 
 
 
-def main(models, data):
+def main(models, data, name):
     # Models are Linear, CNN and LSTM
     # 
     # Data is normal or PCA_X
     #
     if models == "linear":
+        
+        if data == "cond_normal":
+            _data = preprocess_dataset("condensed")
+            in_features = 16
+        if data == "cond_PC1":
+            _data = preprocess_dataset("condensed", pca=1)
+            in_features = 2
+        if data == "cond_PC2":
+            _data = preprocess_dataset("condensed", pca=2)
+            in_features = 4
+        if data == "cond_PC3":
+            _data = preprocess_dataset("condensed", pca=3)
+            in_features = 6
+        if data == "cond_PC5":
+            _data = preprocess_dataset("condensed", pca=5)
+            in_features = 10
+            
+            
+        if data == "concat_normal":
+            _data = preprocess_dataset("concat")
+            in_features = 8 * 3000
+        if data == "concat_PC1":
+            _data = preprocess_dataset("concat", pca=1)
+            in_features = 1 * 3000
+        if data == "concat_PC2":
+            _data = preprocess_dataset("concat", pca=2)
+            in_features = 2 * 3000
+        if data == "concat_PC3":
+            _data = preprocess_dataset("concat", pca=3)
+            in_features = 3 * 3000
+        if data == "concat_PC5":
+            _data = preprocess_dataset("concat", pca=5)
+            in_features = 5 * 3000
+            
         _models = [
-        Linear_NN(num_hidden=[]),
-        Linear_NN(num_hidden=[10]),
-        Linear_NN(num_hidden=[20]),
-        Linear_NN(num_hidden=[40]),
-        Linear_NN(num_hidden=[10,10]),
-        Linear_NN(num_hidden=[20,20]),
-        Linear_NN(num_hidden=[40,40]),
+        Linear_NN(in_features=in_features, num_hidden=[]).to(device),
+        Linear_NN(in_features=in_features, num_hidden=[10]).to(device),
+        Linear_NN(in_features=in_features, num_hidden=[20]).to(device),
+        Linear_NN(in_features=in_features, num_hidden=[40]).to(device),
+        Linear_NN(in_features=in_features, num_hidden=[10,10]).to(device),
+        Linear_NN(in_features=in_features, num_hidden=[20,20]).to(device),
+        Linear_NN(in_features=in_features, num_hidden=[40,40]).to(device),
+        Linear_NN(in_features=in_features, num_hidden=[40,40,40]).to(device),
+        Linear_NN(in_features=in_features, num_hidden=[40,40,40,40]).to(device),
+    ]
+        
+        
+        
+        
+    if models == "CNN":
+        _models = [
+        OneD_Conv(num_hidden = [[10],[140]]),
+        OneD_Conv(num_hidden = [[10],[140,40]]),
+        OneD_Conv(num_hidden = [[10],[146,40,40]]),
+        OneD_Conv(num_hidden = [[20],[140]]),
+        OneD_Conv(num_hidden = [[20],[140,40]]),
+        OneD_Conv(num_hidden = [[20],[140,40,40]]),
+        OneD_Conv(num_hidden = [[40],[140]]),
+        OneD_Conv(num_hidden = [[40],[140,40]]),
+        OneD_Conv(num_hidden = [[40],[140,40,40]]),
     ]
     
-        if data == "normal":
-            _data = preprocess_dataset("condensed")
-                
-    show_model_performances_cross(_models, _data, name="lin_normal")
-    show_model_performances_in_person(_models, _data, name="lin_normal")
-    show_model_calibration(_models, _data, name="lin_normal")
+        
+    
+    print("\nCross-Validation\n", flush=True)
+    show_model_performances_cross(_models, _data, name)
+    print("\In-Person\n")
+    show_model_performances_in_person(_models, _data, name)
+    print("\nCalibration\n")
+    show_model_calibration(_models, _data, name)
     
 
 if __name__ == "__main__":
-    main("linear", "normal")
+    import argparse
+
+    argParser = argparse.ArgumentParser()
+    argParser.add_argument("-v", "--version", type=int)
+
+    try:
+        v = argParser.parse_args().version
+        
+    except:
+        v = -1
+    print("Version = " + str(v))
+
+    if v == 1:
+        main("linear", "cond_normal",   "Condensed_Linear")
+    if v == 2:
+        main("linear", "cond_PC1",      "Condensed_Linear_PC1")
+    if v == 3:      
+        main("linear", "cond_PC2",      "Condensed_Linear_PC2")
+    if v == 4:      
+        main("linear", "cond_PC3",      "Condensed_Linear_PC3")
+    if v == 5:      
+        main("linear", "cond_PC5",      "Condensed_Linear_PC5")
+        
+    if v == 11:
+        main("linear", "concat_normal",   "Concatenated_Linear")
+    if v == 12:
+        main("linear", "concat_PC1",      "Concatenated_Linear_PC1")
+    if v == 13:      
+        main("linear", "concat_PC2",      "Concatenated_Linear_PC2")
+    if v == 14:      
+        main("linear", "concat_PC3",      "Concatenated_Linear_PC3")
+    if v == 15:      
+        main("linear", "concat_PC5",      "Concatenated_Linear_PC5")
+        
+    if v == 20:      
+        main("linear", "concat_PC5",      "Concatenated_Linear_PC5")
