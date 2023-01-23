@@ -8,6 +8,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from random import randint
+import numpy as np
 BATCH_SIZE = 256
 
 
@@ -31,7 +32,7 @@ def train_epoch(model : EOGModel, dataloader : torch.utils.data.DataLoader, opti
 
 
     if weight_classes is not None:
-        loss_function = torch.nn.CrossEntropyLoss(weight=weight_classes)
+        loss_function = torch.nn.CrossEntropyLoss(weight=torch.tensor(weight_classes, dtype=torch.float32))
     else:
         loss_function = torch.nn.CrossEntropyLoss()
     
@@ -50,7 +51,6 @@ def train_epoch(model : EOGModel, dataloader : torch.utils.data.DataLoader, opti
         acc = correct / total * 100
         
         # Update
-        
         loss = loss_function(output, labels.squeeze(-1))
         
         loss_window.append(loss)
@@ -132,7 +132,7 @@ def evaluate_model_cross(model : EOGModel, num_epochs : int, dfs : dict, optim_k
     print("Model {} Acc Mean:  Train: {:.2f}    Test: {:.2f}".format(model.description(), sum(overall_acc_train)/len(overall_acc_train), sum(overall_acc_test)/len(overall_acc_test) ))
     return (overall_acc_train, overall_acc_test)
 
-def show_model_performances_cross(models : list, dfs : dict):
+def show_model_performances_cross(models : list, dfs : dict, name:str):
     """Wraps the evaluate_model function to pass it multiple models at once and produce a nice plot from it
 
     Args:
@@ -169,11 +169,14 @@ def show_model_performances_cross(models : list, dfs : dict):
     sns.despine(trim = True)
     
     plt.grid(axis = "x", alpha = 0.6)
-    plt.xticks(ticks = list(range(1,101,1)), minor = True)
+    plt.grid(axis = "x", alpha = 0.4, which ="minor")
+    ax = plt.gca()
+    start, end = ax.get_xlim()
+    ax.set_xticks(np.arange(int(np.floor(start)), int(np.ceil(end)), 1), minor = True)
     
     ri = randint(100000,999999)
-    plt.savefig("res/cross_performance_{}.png".format(ri))
-    plt.savefig("res/cross_performance_{}.pdf".format(ri))
+    plt.savefig("res/cross_performance_{}_{}.png".format(name,ri))
+    plt.savefig("res/cross_performance_{}_{}.pdf".format(name,ri))
     plt.close()
     
 
@@ -224,7 +227,7 @@ def model_in_person_accuracy(model : EOGModel, num_epochs, dfs : dict, optim_kwa
     print("Model {} Acc Mean:  Train: {:.2f}    Test: {:.2f}".format(model.description(), sum(overall_acc_train)/len(overall_acc_train), sum(overall_acc_test)/len(overall_acc_test) ))
     return (overall_acc_train, overall_acc_test)
 
-def show_model_performances_in_person(models : list, dfs : dict):
+def show_model_performances_in_person(models : list, dfs : dict, name:str):
     """Wraps the model_in_person_accuracy function to pass it multiple models at once and produce a nice plot from it
 
     Args:
@@ -262,11 +265,15 @@ def show_model_performances_in_person(models : list, dfs : dict):
     sns.despine(trim = True)
     
     plt.grid(axis = "x", alpha = 0.6)
-    plt.xticks(ticks = list(range(1,101,1)), minor = True)
+    plt.grid(axis = "x", alpha = 0.4, which ="minor")
+    ax = plt.gca()
+    start, end = ax.get_xlim()
+    ax.set_xticks(np.arange(int(np.floor(start)), int(np.ceil(end)), 1), minor = True)
+    
     
     ri = randint(100000,999999)
-    plt.savefig("res/in_person_performance_{}.png".format(ri))
-    plt.savefig("res/in_person_performance_{}.pdf".format(ri))
+    plt.savefig("res/in_person_performance_{}_{}.png".format(name,ri))
+    plt.savefig("res/in_person_performance_{}_{}.pdf".format(name,ri))
     plt.close()
     
     
@@ -322,7 +329,7 @@ def model_calibration_accuracy(model : EOGModel, num_epochs, dfs : dict, optim_k
     print("Model {} Acc Mean:  Train: {:.2f}    Test: {:.2f}".format(model.description(), sum(overall_acc_train)/len(overall_acc_train), sum(overall_acc_test)/len(overall_acc_test) ))
     return (overall_acc_train, overall_acc_test)
 
-def show_model_calibration(models : list, dfs: dict):
+def show_model_calibration(models : list, dfs: dict, name:str):
     """Wraps the model_in_person_accuracy function to pass it multiple models at once and produce a nice plot from it
 
     Args:
@@ -359,11 +366,14 @@ def show_model_calibration(models : list, dfs: dict):
     sns.despine(trim = True)
     
     plt.grid(axis = "x", alpha = 0.6)
-    plt.xticks(ticks = list(range(1,101,1)), minor = True)
+    plt.grid(axis = "x", alpha = 0.4, which ="minor")
+    ax = plt.gca()
+    start, end = ax.get_xlim()
+    ax.set_xticks(np.arange(int(np.floor(start)), int(np.ceil(end)), 1), minor = True)
     
     ri = randint(100000,999999)
-    plt.savefig("res/calibration_performance_{}.png".format(ri))
-    plt.savefig("res/calibration_performance_{}.pdf".format(ri))
+    plt.savefig("res/calibration_performance_{}_{}.png".format(name,ri))
+    plt.savefig("res/calibration_performance_{}_{}.pdf".format(name,ri))
     plt.close()
 
 
@@ -388,10 +398,10 @@ def main(models, data):
     
         if data == "normal":
             _data = preprocess_dataset("condensed")
-            
-    show_model_performances_cross(_models, _data)
-    show_model_performances_in_person(_models, _data)
-    show_model_calibration(_models, _data)
+                
+    show_model_performances_cross(_models, _data, name="lin_normal")
+    show_model_performances_in_person(_models, _data, name="lin_normal")
+    show_model_calibration(_models, _data, name="lin_normal")
     
 
 if __name__ == "__main__":

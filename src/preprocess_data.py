@@ -82,7 +82,7 @@ def __form_window_concat(df: pd.DataFrame , consecutive_steps: int, stride : int
     df_windowed = df_n[indices]
 
     # Calculate features
-    df_features =  df_windowed[:,:,:-1].reshape((-1,consecutive_steps*8))
+    df_features =  df_windowed[:,:,:-1].reshape((-1,consecutive_steps*len(var)))
     
     df_labels = np.median(df_windowed[:,:,-1] ,axis=1, keepdims=True).astype(int)
 
@@ -139,20 +139,27 @@ def preprocess_dataset(method: str, consecutive_steps : int = 3000, stride : int
             # Remove unnecessary columns
             df = df.drop(labels=["#timestamp","date_time"], axis=1)
             
-            print(file_name + " loaded            ", end = "\r")
+            
             
             if normalize:
                 df = __normalize_dataframe(df)
+            dfs[file_name] = df
+            print(file_name + " loaded            ", end = "\r")
             
+    if pca is not None:
+        dfs = __pca_dataset(dfs, pca)   
+    
+    for p in persons:
+        for d in days:
+            file_name = "p{}_d{}".format(p,d)    
+            df = dfs[file_name]
             df_new = func(df = df, consecutive_steps = consecutive_steps , stride = stride)
             dfs[file_name] = df_new
             
             print(file_name + " preprocessed         " , end = "\r")
             
             
-    if pca is not None:
-        dfs = __pca_dataset(dfs, pca)      
-    
+   
     print("Finished dataset")
     return dfs      
             
@@ -228,7 +235,8 @@ def create_dataloader(datasets : dict, batch_size : int, shuffle : bool = True, 
     Returns:
         torch.utils.data.DataLoader: The dataloader
     """
-    # Get datasets 
+    # Get datasets
+    
     datasets = list(datasets.values())
     
     # Transform to numpy
@@ -244,6 +252,7 @@ def create_dataloader(datasets : dict, batch_size : int, shuffle : bool = True, 
     data = torch.from_numpy(datasets[:,:-1].astype(np.float32))
     labels = torch.from_numpy(datasets[:,-1, None].astype(np.int64))
     
+
     # Construct TensorDataset
     dataloader = DataLoader(TensorDataset(data, labels), batch_size = batch_size, shuffle = shuffle, num_workers=0)
     
@@ -256,10 +265,11 @@ def create_dataloader(datasets : dict, batch_size : int, shuffle : bool = True, 
     
     
 def main():
-    #dfs = preprocess_dataset("condensed",)
+    #dfs = preprocess_dataset("condensed", persons=[1,])
     #dfs = preprocess_dataset("condensed", pca = 5, persons=[1,])
-    dfs = preprocess_dataset("concat", persons = [1])
-    #dfs = preprocess_dataset("concat", pca = 5, persons=[1,2,3])
+    #dfs = preprocess_dataset("concat", persons = [1])
+    dfs = preprocess_dataset("concat", pca = 5, persons=[1])
+
     
     
     loader_train, weights = create_dataloader(dfs, 256, undersampling = False, return_weights= True)

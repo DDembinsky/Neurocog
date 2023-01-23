@@ -11,13 +11,16 @@ class EOGModel(torch.nn.Module):
 
     
     def description(self):
-        return str(self.num_layers)
+        return str(self.num_hidden)
     
     def reset_parameters(self):
         for layer in self.model.children():
             if hasattr(layer,"reset_parameter"):
                 layer.reset_parameters()
+    def __prepare_timeseries(self,x):
+        return x
     def forward(self,x):
+        x = self.__prepare_timeseries(x)
         raise NotImplemented("This is an abstract class")
 
     
@@ -85,11 +88,21 @@ class OneD_Conv(EOGModel):
         del lin_layers[-1]
             
         self.linear = torch.nn.Sequential(*lin_layers)
-        
+    
+    def __prepare_timeseries(self,x,in_features):
+        """Input: (N, C*L)  -> Output (N,C,L)"""
+        x = torch.transpose(x.reshape([len(x),-1,4],),1,2)
+        return x
+    
     def forward(self, x):
+        x = self.__prepare_timeseries(x,self.num_hidden[0][0])
         x_ = self.conv(x)
         x_ = torch.flatten(x_,start_dim=1)      
         return self.linear(x_)
 
 class Rec_NN(EOGModel):
-    pass
+    def __prepare_timeseries(self,x,in_features):
+        """Input: (N, C*L)  -> Output (N,L,C)"""
+        x = x.reshape([len(x),-1,in_features])
+        return x
+        
