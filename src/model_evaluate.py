@@ -164,8 +164,8 @@ def show_model_performances_cross(models : list, dfs : dict, name:str):
                 
         else:
             overall_acc_train, overall_acc_test = evaluate_model_cross(mod,5,dfs)
-            LOG_SAVES["{}".format(mod.description())] = (overall_acc_train, overall_acc_test )
-            with open("res/logs/cross_validation_{}.pickle".format(name), "ab") as LOG_FILE:
+            LOG_SAVES[mod.description()] = (overall_acc_train, overall_acc_test )
+            with open("res/logs/cross_validation_{}.pickle".format(name), "wb") as LOG_FILE:
                 pickle.dump(LOG_SAVES, LOG_FILE)
         logging = pd.concat([logging, 
         
@@ -193,8 +193,8 @@ def show_model_performances_cross(models : list, dfs : dict, name:str):
     ax.set_title("leave-one-participant-out performance for {} models".format(name))
     
     plt.tight_layout()
-    plt.savefig("res/cross_performance_{}.png".format(name))
-    plt.savefig("res/cross_performance_{}.pdf".format(name))
+    plt.savefig("res/{}_cross_performance.png".format(name))
+    #plt.savefig("res/{}_cross_performance.pdf".format(name))
     plt.close()
     
 
@@ -270,9 +270,9 @@ def show_model_performances_in_person(models : list, dfs : dict, name:str):
             overall_acc_train, overall_acc_test = LOG_SAVES[mod.description()]
                 
         else:
-            overall_acc_train, overall_acc_test = evaluate_model_cross(mod,5,dfs)
-            LOG_SAVES["{}".format(mod.description())] = (overall_acc_train, overall_acc_test )
-            with open("res/logs/in_person_{}.pickle".format(name), "ab") as LOG_FILE:
+            overall_acc_train, overall_acc_test = model_in_person_accuracy(mod,5,dfs)
+            LOG_SAVES[mod.description()] = (overall_acc_train, overall_acc_test )
+            with open("res/logs/in_person_{}.pickle".format(name), "wb") as LOG_FILE:
                 pickle.dump(LOG_SAVES, LOG_FILE)
                 
         logging = pd.concat([logging, 
@@ -302,8 +302,8 @@ def show_model_performances_in_person(models : list, dfs : dict, name:str):
     ax.set_title("leave-one-day-out performance for {} models".format(name))
     
     plt.tight_layout()
-    plt.savefig("res/in_person_performance_{}.png".format(name))
-    plt.savefig("res/in_person_performance_{}.pdf".format(name))
+    plt.savefig("res/{}_in_person_performance.png".format(name))
+    #plt.savefig("res/{}_in_person_performance.pdf".format(name))
     plt.close()
     
     
@@ -384,9 +384,9 @@ def show_model_calibration(models : list, dfs: dict, name:str):
             overall_acc_train, overall_acc_test = LOG_SAVES[mod.description()]
                 
         else:
-            overall_acc_train, overall_acc_test = evaluate_model_cross(mod,5,dfs)
-            LOG_SAVES["{}".format(mod.description())] = (overall_acc_train, overall_acc_test )
-            with open("res/logs/in_person_{}.pickle".format(name), "ab") as LOG_FILE:
+            overall_acc_train, overall_acc_test = model_calibration_accuracy(mod,5,dfs)
+            LOG_SAVES[mod.description()] = (overall_acc_train, overall_acc_test )
+            with open("res/logs/in_person_{}.pickle".format(name), "wb") as LOG_FILE:
                 pickle.dump(LOG_SAVES, LOG_FILE)
         logging = pd.concat([logging, 
         
@@ -414,8 +414,8 @@ def show_model_calibration(models : list, dfs: dict, name:str):
     ax.set_title("train-and-calibrate performance for {} models".format(name))
     
     plt.tight_layout()
-    plt.savefig("res/calibration_performance_{}.png".format(name))
-    plt.savefig("res/calibration_performance_{}.pdf".format(name))
+    plt.savefig("res/{}_calibration_performance.png".format(name))
+    #plt.savefig("res/{}_calibration_performance.pdf".format(name))
     plt.close()
 
 
@@ -476,20 +476,51 @@ def main(models, data, name):
         
         
         
+    else:   
+
+        if data == "concat_normal":
+            _data = preprocess_dataset("concat")
+            in_features = 8
+        if data == "concat_PC1":
+            _data = preprocess_dataset("concat", pca=1)
+            in_features = 1
+        if data == "concat_PC2":
+            _data = preprocess_dataset("concat", pca=2)
+            in_features = 2
+        if data == "concat_PC3":
+            _data = preprocess_dataset("concat", pca=3)
+            in_features = 3
+        if data == "concat_PC5":
+            _data = preprocess_dataset("concat", pca=5)
+            in_features = 5
         
-    if models == "CNN":
-        _models = [
-        OneD_Conv(num_hidden = [[10],[140]]),
-        OneD_Conv(num_hidden = [[10],[140,40]]),
-        OneD_Conv(num_hidden = [[10],[146,40,40]]),
-        OneD_Conv(num_hidden = [[20],[140]]),
-        OneD_Conv(num_hidden = [[20],[140,40]]),
-        OneD_Conv(num_hidden = [[20],[140,40,40]]),
-        OneD_Conv(num_hidden = [[40],[140]]),
-        OneD_Conv(num_hidden = [[40],[140,40]]),
-        OneD_Conv(num_hidden = [[40],[140,40,40]]),
-    ]
-    
+        if models == "CNN":  
+            _models = [
+            OneD_Conv(in_features = in_features, num_hidden = [[10],[140]]).to(device),
+            OneD_Conv(in_features = in_features, num_hidden = [[10],[140,40]]).to(device),
+            OneD_Conv(in_features = in_features, num_hidden = [[10],[140,40,40]]).to(device),
+            OneD_Conv(in_features = in_features, num_hidden = [[20],[280]]).to(device),
+            OneD_Conv(in_features = in_features, num_hidden = [[20],[280,40]]).to(device),
+            OneD_Conv(in_features = in_features, num_hidden = [[20],[280,40,40]]).to(device),
+            OneD_Conv(in_features = in_features, num_hidden = [[40],[560]]).to(device),
+            OneD_Conv(in_features = in_features, num_hidden = [[40],[560,40]]).to(device),
+            OneD_Conv(in_features = in_features, num_hidden = [[40],[560,40,40]]).to(device),
+        ]
+        
+        if models == "LSTM":
+            _models = [
+            Rec_NN(in_features = in_features, num_hidden = [(20,1,False),[]]).to(device),
+            Rec_NN(in_features = in_features, num_hidden = [(20,1,False),[20]]).to(device),
+            Rec_NN(in_features = in_features, num_hidden = [(20,1,False),[40]]).to(device),
+            Rec_NN(in_features = in_features, num_hidden = [(20,1,False),[40,40]]).to(device),
+            Rec_NN(in_features = in_features, num_hidden = [(20,1,False),[40,40,40]]).to(device),
+            Rec_NN(in_features = in_features, num_hidden = [(40,1,False),[40,40,40]]).to(device),
+            Rec_NN(in_features = in_features, num_hidden = [(40,2,False),[40,40,40]]).to(device),
+            Rec_NN(in_features = in_features, num_hidden = [(40,3,False),[40,40,40]]).to(device),
+            Rec_NN(in_features = in_features, num_hidden = [(40,1,True),[40,40,40]]).to(device),
+            Rec_NN(in_features = in_features, num_hidden = [(40,2,True),[40,40,40]]).to(device),
+            Rec_NN(in_features = in_features, num_hidden = [(40,3,True),[40,40,40]]).to(device),
+        ]
         
     
     print("\nCross-Validation\n", flush=True)
@@ -535,5 +566,24 @@ if __name__ == "__main__":
     if v == 15:      
         main("linear", "concat_PC5",      "Concatenated_Linear_PC5")
         
-    if v == 20:      
-        main("linear", "concat_PC5",      "Concatenated_Linear_PC5")
+    if v == 21:      
+        main("CNN", "concat_normal",    "Concatenated_CNN")
+    if v == 22:      
+        main("CNN", "concat_PC1",      "Concatenated_CNN_PC1")
+    if v == 23:      
+        main("CNN", "concat_PC2",      "Concatenated_CNN_PC2")
+    if v == 24:      
+        main("CNN", "concat_PC3",      "Concatenated_CNN_PC3")
+    if v == 25:      
+        main("CNN", "concat_PC5",      "Concatenated_CNN_PC5")
+        
+    if v == 31:      
+        main("LSTM", "concat_normal",    "Concatenated_LSTM")
+    if v == 32:      
+        main("LSTM", "concat_PC1",    "Concatenated_LSTM_PC1")
+    if v == 33:      
+        main("LSTM", "concat_PC2",    "Concatenated_LSTM_PC2")
+    if v == 34:      
+        main("LSTM", "concat_PC3",    "Concatenated_LSTM_PC3")
+    if v == 35:      
+        main("LSTM", "concat_PC5",    "Concatenated_LSTM_PC5")
