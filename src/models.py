@@ -21,7 +21,7 @@ class EOGModel(torch.nn.Module):
         return x
     def forward(self,x):
         x = self.__prepare_timeseries(x)
-        raise self.model(x)
+        return self.model(x)
 
     
 class Linear_NN(EOGModel):

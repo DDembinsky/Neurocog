@@ -360,7 +360,7 @@ def model_calibration_accuracy(model : EOGModel, num_epochs, dfs : dict, optim_k
     return (overall_acc_train, overall_acc_test)
 
 def show_model_calibration(models : list, dfs: dict, name:str):
-    """Wraps the model_in_person_accuracy function to pass it multiple models at once and produce a nice plot from it
+    """Wraps the calibration function to pass it multiple models at once and produce a nice plot from it
 
     Args:
         models (list): list of models
@@ -370,12 +370,12 @@ def show_model_calibration(models : list, dfs: dict, name:str):
     
     try:
         # Is empty
-        LOG_FILE = open("res/logs/in_person_{}.pickle".format(name), "xb")
+        LOG_FILE = open("res/logs/calibration_{}.pickle".format(name), "xb")
         LOG_SAVES = {}
         pickle.dump(LOG_SAVES, LOG_FILE)
         LOG_FILE.close()
     except FileExistsError:
-        with open("res/logs/in_person_{}.pickle".format(name), "rb") as LOG_FILE:
+        with open("res/logs/calibration_{}.pickle".format(name), "rb") as LOG_FILE:
             LOG_SAVES = pickle.load(LOG_FILE)   
         
     for mod in models:
@@ -386,7 +386,7 @@ def show_model_calibration(models : list, dfs: dict, name:str):
         else:
             overall_acc_train, overall_acc_test = model_calibration_accuracy(mod,5,dfs)
             LOG_SAVES[mod.description()] = (overall_acc_train, overall_acc_test )
-            with open("res/logs/in_person_{}.pickle".format(name), "wb") as LOG_FILE:
+            with open("res/logs/calibration_{}.pickle".format(name), "wb") as LOG_FILE:
                 pickle.dump(LOG_SAVES, LOG_FILE)
         logging = pd.concat([logging, 
         
@@ -544,46 +544,191 @@ if __name__ == "__main__":
         v = -1
     print("Version = " + str(v))
 
-    if v == 1:
-        main("linear", "cond_normal",   "Condensed_Linear")
-    if v == 2:
-        main("linear", "cond_PC1",      "Condensed_Linear_PC1")
-    if v == 3:      
-        main("linear", "cond_PC2",      "Condensed_Linear_PC2")
-    if v == 4:      
-        main("linear", "cond_PC3",      "Condensed_Linear_PC3")
-    if v == 5:      
-        main("linear", "cond_PC5",      "Condensed_Linear_PC5")
+    if v < 50:
+        if v == 1:
+            main("linear", "cond_normal",   "Condensed_Linear")
+        if v == 2:
+            main("linear", "cond_PC1",      "Condensed_Linear_PC1")
+        if v == 3:      
+            main("linear", "cond_PC2",      "Condensed_Linear_PC2")
+        if v == 4:      
+            main("linear", "cond_PC3",      "Condensed_Linear_PC3")
+        if v == 5:      
+            main("linear", "cond_PC5",      "Condensed_Linear_PC5")
+            
+        if v == 11:
+            main("linear", "concat_normal",   "Concatenated_Linear")
+        if v == 12:
+            main("linear", "concat_PC1",      "Concatenated_Linear_PC1")
+        if v == 13:      
+            main("linear", "concat_PC2",      "Concatenated_Linear_PC2")
+        if v == 14:      
+            main("linear", "concat_PC3",      "Concatenated_Linear_PC3")
+        if v == 15:      
+            main("linear", "concat_PC5",      "Concatenated_Linear_PC5")
+            
+        if v == 21:      
+            main("CNN", "concat_normal",    "Concatenated_CNN")
+        if v == 22:      
+            main("CNN", "concat_PC1",      "Concatenated_CNN_PC1")
+        if v == 23:      
+            main("CNN", "concat_PC2",      "Concatenated_CNN_PC2")
+        if v == 24:      
+            main("CNN", "concat_PC3",      "Concatenated_CNN_PC3")
+        if v == 25:      
+            main("CNN", "concat_PC5",      "Concatenated_CNN_PC5")
+            
+        if v == 31:      
+            main("LSTM", "concat_normal",    "Concatenated_LSTM")
+        if v == 32:      
+            main("LSTM", "concat_PC1",    "Concatenated_LSTM_PC1")
+        if v == 33:      
+            main("LSTM", "concat_PC2",    "Concatenated_LSTM_PC2")
+        if v == 34:      
+            main("LSTM", "concat_PC3",    "Concatenated_LSTM_PC3")
+        if v == 35:      
+            main("LSTM", "concat_PC5",    "Concatenated_LSTM_PC5")
+    else:
+        if v == 51:
+            # best results
+            print("condensed")
+            _data = preprocess_dataset("condensed")
+            print("\nCross-Validation\n", flush=True) 
+            show_model_performances_cross([Linear_NN(num_hidden=[40,40,40,40]).to(device)], _data, "Condensed_Linear")
+            print("\In-Person\n")
+            show_model_performances_in_person([Linear_NN(num_hidden=[40]).to(device)], _data, "Condensed_Linear")
+            print("\nCalibration\n")
+            show_model_calibration([Linear_NN(num_hidden=[40,40,40,40]).to(device)], _data, "Condensed_Linear")
+
+                   
+        if v == 52:
+            # best results
+            print("Concatenated")
+            _data = preprocess_dataset("concat")
+            print("\nCross-Validation\n", flush=True) 
+            show_model_performances_cross([Linear_NN(in_features=24000,  num_hidden=[40,40,40,40]).to(device)], _data, "Concatenated_Linear")
+            print("\In-Person\n")
+            show_model_performances_in_person([Linear_NN(in_features=24000,num_hidden=[40]).to(device)], _data, "Concatenated_Linear")
+            print("\nCalibration\n")
+            show_model_calibration([Linear_NN(in_features=24000,num_hidden=[40,40,40]).to(device)], _data, "Concatenated_Linear")
+
+        if v == 53:
+            # PCA hurts
+            print("PCA hurts")
+            
+            logging = pd.DataFrame(columns= ["data", "acc", "set"])
+            
+            
+            for ds in [
+                {"name" : "1 PC", "args" :  {"method" : "condensed", "pca" : 1}, "in" : 2},
+                {"name" : "2 PC", "args" :  {"method" : "condensed", "pca" : 2}, "in" : 4},
+                {"name" : "3 PC", "args" :  {"method" : "condensed", "pca" : 3}, "in" : 6},
+                {"name" : "5 PC", "args" :  {"method" : "condensed", "pca" : 5}, "in" : 10},
+                {"name" : "Unmodified", "args" : {"method" : "condensed"}, "in" : 16},
+            ]:
+                _data = preprocess_dataset(**ds["args"])
+                mod = Linear_NN(in_features=ds["in"], num_hidden=[40,40,40,40]).to(device)
+                
+                overall_acc_train, overall_acc_test = evaluate_model_cross(mod,5,_data)
+                
+                logging = pd.concat([logging, 
         
-    if v == 11:
-        main("linear", "concat_normal",   "Concatenated_Linear")
-    if v == 12:
-        main("linear", "concat_PC1",      "Concatenated_Linear_PC1")
-    if v == 13:      
-        main("linear", "concat_PC2",      "Concatenated_Linear_PC2")
-    if v == 14:      
-        main("linear", "concat_PC3",      "Concatenated_Linear_PC3")
-    if v == 15:      
-        main("linear", "concat_PC5",      "Concatenated_Linear_PC5")
+                        pd.DataFrame({
+                            "data" : [ds["name"] for _ in overall_acc_train],
+                            "acc" : overall_acc_train,
+                            "set" : ["Train" for _ in overall_acc_train]
+                        }),
+                        pd.DataFrame({
+                            "data" : [ds["name"] for _ in overall_acc_test],
+                            "acc" : overall_acc_test,
+                            "set" : ["Test" for _ in overall_acc_test]
+                        })
+                    ])
+
+                
+            sns.boxplot(data=logging, x="acc", y="data", hue="set")
+            #sns.stripplot(data=logging, x="acc", y="model", hue="set")
+            sns.despine()
+            
+            plt.grid(axis = "x", alpha = 0.6)
+            plt.grid(axis = "x", alpha = 0.4, which ="minor")
+            ax = plt.gca()
+            start, end = ax.get_xlim()
+            ax.set_xticks(np.arange(int(np.floor(start)), int(np.ceil(end)), 1), minor = True)
+            ax.set_title("Performance for different amount of features")
+            
+            plt.tight_layout()
+            plt.savefig("res/meta_PCA_hurts.png")
+            plt.savefig("res/meta_PCA_hurts.pdf")
+            plt.close()
+    
+            
+        if v == 54: 
+            # No overfitting
+            print("No overfitting")
+            print("condensed")
+            _data = preprocess_dataset("condensed")
+            
+            logging = pd.DataFrame(columns= ["setup", "acc", "set"])
+            mod = Linear_NN(num_hidden=[40,40,40,40]).to(device)
+            
+            for set in [
+                {"name" : "leave-one-\nparticipant-out", "func" : evaluate_model_cross},
+                {"name" : "leave-one-\nday-out",         "func" : model_in_person_accuracy},
+                {"name" : "train-and-\ncalibrate",       "func" : model_calibration_accuracy},
+            ]:
+                print(set["name"])
+                overall_acc_train, overall_acc_test = set["func"](mod,5,_data)
+                
+                logging = pd.concat([logging, 
         
-    if v == 21:      
-        main("CNN", "concat_normal",    "Concatenated_CNN")
-    if v == 22:      
-        main("CNN", "concat_PC1",      "Concatenated_CNN_PC1")
-    if v == 23:      
-        main("CNN", "concat_PC2",      "Concatenated_CNN_PC2")
-    if v == 24:      
-        main("CNN", "concat_PC3",      "Concatenated_CNN_PC3")
-    if v == 25:      
-        main("CNN", "concat_PC5",      "Concatenated_CNN_PC5")
-        
-    if v == 31:      
-        main("LSTM", "concat_normal",    "Concatenated_LSTM")
-    if v == 32:      
-        main("LSTM", "concat_PC1",    "Concatenated_LSTM_PC1")
-    if v == 33:      
-        main("LSTM", "concat_PC2",    "Concatenated_LSTM_PC2")
-    if v == 34:      
-        main("LSTM", "concat_PC3",    "Concatenated_LSTM_PC3")
-    if v == 35:      
-        main("LSTM", "concat_PC5",    "Concatenated_LSTM_PC5")
+                        pd.DataFrame({
+                            "setup" : [set["name"] for _ in overall_acc_train],
+                            "acc" : overall_acc_train,
+                            "set" : ["Train" for _ in overall_acc_train]
+                        }),
+                        pd.DataFrame({
+                            "setup" : [set["name"] for _ in overall_acc_test],
+                            "acc" : overall_acc_test,
+                            "set" : ["Test" for _ in overall_acc_test]
+                        })
+                    ])
+
+                
+            sns.boxplot(data=logging, x="acc", y="setup", hue="set")
+            #sns.stripplot(data=logging, x="acc", y="model", hue="set")
+            sns.despine()
+            
+            plt.grid(axis = "x", alpha = 0.6)
+            plt.grid(axis = "x", alpha = 0.4, which ="minor")
+            ax = plt.gca()
+            start, end = ax.get_xlim()
+            ax.set_xticks(np.arange(int(np.floor(start)), int(np.ceil(end)), 1), minor = True)
+            ax.set_title("Overfitting depends on the training set")
+            
+            plt.tight_layout()
+            plt.savefig("res/meta_overfitting.png")
+            plt.savefig("res/meta_overfitting.pdf")
+            plt.close()
+            
+        if v == 61:
+            # best results
+            print("CNN")
+            _data = preprocess_dataset("concat")
+            print("\nCross-Validation\n", flush=True) 
+            show_model_performances_cross([OneD_Conv(in_features=8,  num_hidden=[[40],[560,40,40]]).to(device)], _data, "Concatenated_CNN")
+            print("\In-Person\n")
+            show_model_performances_in_person([OneD_Conv(in_features=8, num_hidden=[[40],[560,40,40]]).to(device)], _data, "Concatenated_CNN")
+            print("\nCalibration\n")
+            show_model_calibration([OneD_Conv(in_features=8, num_hidden=[[20],[280,40,40]]).to(device)], _data, "Concatenated_CNN") 
+            
+        if v == 71: 
+             # best results
+            print("LSTM")
+            _data = preprocess_dataset("concat")
+            print("\nCross-Validation\n", flush=True) 
+            show_model_performances_cross([Rec_NN(in_features = 8, num_hidden = [(40,2,True),[40,40,40]]).to(device)], _data, "Concatenated_CNN")
+            print("\In-Person\n")
+            show_model_performances_in_person([Rec_NN(in_features = 8, num_hidden = [(40,2,True),[40,40,40]]).to(device),], _data, "Concatenated_CNN")
+            print("\nCalibration\n")
+            show_model_calibration([Rec_NN(in_features = 8, num_hidden = [(40,3,True),[40,40,40]]).to(device),], _data, "Concatenated_CNN") 

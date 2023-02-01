@@ -3,3 +3,4 @@ res/*
 setup/
 
 *.pyc
+__pycache__

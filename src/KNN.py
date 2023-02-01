@@ -164,17 +164,6 @@ def calculate_accuraccy(labels1 : np.ndarray, labels2 : np.ndarray) -> float:
 
 
 
-
-
-
-
-
-
-
-
-    
-
-
 def main():
     dfs = preprocess_dataset("condensed", 100, False, persons=list(range(1,11,1)) )
     
